@@ -117,6 +117,13 @@ export type Env = z.infer<typeof envSchema>
 
 let cached: Env | undefined
 
+/** Every invalid variable and the rule it broke (names and rules only, never values). Empty when the settings are valid. */
+export function describeEnvProblems(raw: NodeJS.ProcessEnv = process.env): { variable: string; problem: string }[] {
+  const parsed = envSchema.safeParse(raw)
+  if (parsed.success) return []
+  return parsed.error.issues.map((issue) => ({ variable: issue.path.join('.') || '(root)', problem: issue.message }))
+}
+
 /**
  * Validated server configuration. Parsed on first use and cached; throws a descriptive
  * error listing every invalid variable so misconfiguration fails fast and visibly.
