@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — source: docs/design.md.
+   Primitives are defined once; components use only the semantic tokens via tailwind.config.ts. */
+:root {
+  /* Primitives: Grey */
+  --color-grey-900: #070a0e;
+  --color-grey-500: #4a4c4f;
+  --color-grey-400: #5e6062;
+  --color-grey-300: #8f9193;
+  --color-grey-200: #c1c2c3;
+  --color-grey-100: #dadadb;
+  --color-grey-50: #f0f0f1;
+  --color-grey-25: #fafafa;
+
+  /* Primitives: Blue */
+  --color-blue-700: #0d469e;
+  --color-blue-600: #0044ae;
+  --color-blue-500: #115acb;
+  --color-blue-200: #92b7f0;
+  --color-blue-50: #e7effc;
+
+  /* Primitives: Green */
+  --color-green-700: #0d720a;
+  --color-green-500: #13a10e;
+  --color-green-200: #92d490;
+  --color-green-50: #e7f6e7;
+
+  /* Primitives: Red */
+  --color-red-700: #942528;
+  --color-red-500: #d13438;
+  --color-red-200: #eaa2a3;
+  --color-red-50: #faebeb;
+
+  /* Primitives: Yellow */
+  --color-yellow-800: #b36800;
+  --color-yellow-500: #ffaa33;
+  --color-yellow-200: #ffe3bd;
+  --color-yellow-50: #fff9f0;
+
+  /* Primitives: Violet */
+  --color-violet-700: #6600cc;
+  --color-violet-500: #7f00ff;
+  --color-violet-200: #e3c7ff;
+  --color-violet-50: #f7f0ff;
+
+  /* Semantic tokens */
+  --text-primary: var(--color-grey-900);
+  --text-secondary: var(--color-grey-500);
+  --text-disabled: var(--color-grey-400);
+  --text-on-brand: #ffffff;
+
+  --bg-primary: #ffffff;
+  --bg-surface: var(--color-grey-25);
+  --bg-subtle: var(--color-grey-50);
+  --bg-pressed: var(--color-grey-100);
+
+  --border-default: var(--color-grey-100);
+  --border-strong: var(--color-grey-200);
+
+  --brand: var(--color-blue-500);
+  --brand-hover: var(--color-blue-600);
+  --brand-subtle: var(--color-blue-50);
+
+  --success-bg: var(--color-green-50);
+  --success-border: var(--color-green-200);
+  --success-text: var(--color-green-700);
+  --success-solid: var(--color-green-500);
+
+  --danger-bg: var(--color-red-50);
+  --danger-border: var(--color-red-200);
+  --danger-text: var(--color-red-700);
+  --danger-solid: var(--color-red-500);
+
+  --warning-bg: var(--color-yellow-50);
+  --warning-border: var(--color-yellow-200);
+  --warning-text: var(--color-yellow-800);
+  --warning-solid: var(--color-yellow-500);
+
+  --info-bg: var(--color-blue-50);
+  --info-border: var(--color-blue-200);
+  --info-text: var(--color-blue-700);
+  --info-solid: var(--color-blue-500);
+
+  --accent-bg: var(--color-violet-50);
+  --accent-border: var(--color-violet-200);
+  --accent-text: var(--color-violet-700);
+  --accent-solid: var(--color-violet-500);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg-surface font-sans text-body-lg text-text-primary antialiased;
+  }
+
+  /* Visible keyboard focus everywhere (design system: 2px brand ring) */
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Buttons (radius 6px, 100ms ease-out transitions per design system) */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-body-lg transition-colors duration-fast ease-out;
+  }
+  .btn-primary {
+    @apply btn bg-bg-brand text-text-on-brand hover:bg-bg-brand-hover;
+  }
+  .btn-secondary {
+    @apply btn border border-border bg-bg-primary text-text-primary hover:border-border-strong hover:bg-bg-subtle active:bg-bg-pressed;
+  }
+  .btn-danger {
+    @apply btn bg-danger-solid text-text-on-brand hover:bg-danger-text;
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed;
+  }
+  .btn-secondary:disabled {
+    @apply border-border bg-bg-surface text-text-disabled;
+  }
+
+  /* Semantic status badge: tint bg, 200 border, 700 text, radius 4px, 2px/8px padding */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-body-sm font-medium;
+  }
+  .badge-neutral {
+    @apply badge border-border-strong bg-bg-subtle text-text-primary;
+  }
+  .badge-success {
+    @apply badge border-success-border bg-success-bg text-success-text;
+  }
+  .badge-danger {
+    @apply badge border-danger-border bg-danger-bg text-danger-text;
+  }
+  .badge-warning {
+    @apply badge border-warning-border bg-warning-bg text-warning-text;
+  }
+  .badge-info {
+    @apply badge border-info-border bg-info-bg text-info-text;
+  }
+}
