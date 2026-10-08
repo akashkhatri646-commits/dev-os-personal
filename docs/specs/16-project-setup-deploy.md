@@ -78,6 +78,7 @@ Baseline = `supabase-schema.sql` (copied to `supabase/migrations/0001_baseline.s
 | `0006_review_functions.sql` | `submit_review`, `reject_review`, `release_expired_review_locks` (also appended to the baseline) | MVP |
 | `0007_safety_controls.sql` | incident close-out columns, `llm_spend_daily` with `add_llm_spend` / `get_llm_spend` (also appended to the baseline) | MVP |
 | `0008_rate_limit.sql` | `rate_limit_events`, `rate_limit_hit` (database-backed rate limiting) | MVP |
+| `0009_fix_commit_record_found.sql` | fixes an ambiguous column in `commit_record` that broke every automatic commit (also folded into the baseline) | MVP |
 | `0008_source_hip_id.sql` | `alter table provider_sources add column hip_id text;` | MVP1 |
 | `0009_metrics.sql` | `refresh_source_metrics(date)`, `calibrators` table + RLS (select IE/admin) | GA |
 | `0010_consent_regime_hipaa.sql` | HIPAA authorization tables/enums use | ITER |

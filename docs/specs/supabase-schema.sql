@@ -828,7 +828,7 @@ begin
     select decision into v_decision from public.routing_decisions where record_id = p_record_id;
     if v_decision is distinct from 'auto_commit' then raise exception 'not_routed_auto_commit'; end if;
     if r.status <> 'routing' then raise exception 'bad_status_%', r.status; end if;
-    if exists (select 1 from public.extracted_fields where record_id = p_record_id and found and not grounded) then
+    if exists (select 1 from public.extracted_fields where record_id = p_record_id and extracted_fields.found and not extracted_fields.grounded) then
       raise exception 'ungrounded_field_present';
     end if;
   else

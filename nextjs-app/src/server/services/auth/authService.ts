@@ -36,6 +36,8 @@ export async function signInWithPassword(email: string, password: string): Promi
     .eq('email', email)
     .maybeSingle()
   if (lookupError) {
+    // Code and message only (for example "Invalid API key" or "relation does not exist"): never the request or any key.
+    logger.error({ code: lookupError.code, message: lookupError.message, hint: lookupError.hint }, 'sign-in profile lookup failed')
     throw new AppError('INTERNAL', 'Sign-in is temporarily unavailable.', { cause: lookupError })
   }
   const profile = row ? lockProfileSchema.parse(row) : null

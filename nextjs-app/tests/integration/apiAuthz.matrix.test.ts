@@ -91,6 +91,7 @@ const SELF_AUTHENTICATED = [
   'api/health/route.ts',
   'api/ingestions/route.ts#POST',
   'api/internal/audit/verify/route.ts',
+  'api/internal/config-check/route.ts',
   'api/worker/tick/route.ts',
   'auth/callback/route.ts',
 ]
