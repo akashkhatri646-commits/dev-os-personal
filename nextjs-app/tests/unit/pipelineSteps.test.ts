@@ -37,6 +37,18 @@ describe('buildPipelineSteps', () => {
     expect(states(steps)).toBe('consent:done ocr:done extraction:done mapping:current validation:pending scoring:pending routing:pending commit:pending')
   })
 
+  it('shows the next step as waiting, not running, while the worker has not picked it up', () => {
+    // Mapping has finished but the status still says mapping: the validation job is queued.
+    const steps = buildPipelineSteps('mapping', [
+      event('consent.checked', '00:00'),
+      event('ocr.completed', '00:10'),
+      event('extraction.completed', '01:10'),
+      event('mapping.completed', '01:20'),
+    ])
+    expect(states(steps)).toBe('consent:done ocr:done extraction:done mapping:done validation:pending scoring:pending routing:pending commit:pending')
+    expect(steps[4]?.note).toBe('Queued: waiting for the worker')
+  })
+
   it('marks the next step current while a record is processing, and later ones pending', () => {
     const steps = buildPipelineSteps('extracting', [event('consent.checked', '00:00'), event('ocr.completed', '00:10')])
     expect(states(steps)).toBe('consent:done ocr:done extraction:current mapping:pending validation:pending scoring:pending routing:pending commit:pending')

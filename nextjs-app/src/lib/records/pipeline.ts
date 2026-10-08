@@ -29,6 +29,8 @@ const IN_PROGRESS: readonly RecordStatus[] = ['received', 'consent_check', 'norm
 
 /** The step index each status starts, used to find where a re-run restarted. */
 const RESTART_INDEX: Partial<Record<RecordStatus, number>> = { consent_check: 0, normalizing: 1, extracting: 2, mapping: 3, validating: 4, scoring: 5, routing: 6 }
+/** The step a status says is running. */
+const STATUS_STEP: Partial<Record<RecordStatus, number>> = { consent_check: 0, normalizing: 1, extracting: 2, mapping: 3, validating: 4, scoring: 5, routing: 6 }
 const RESTART_REASONS: readonly string[] = ['manual_retry', 'admin_rerun']
 
 const latest = (events: readonly RecordEvent[], names: readonly string[]) => [...events].reverse().find((event) => names.includes(event.event))
@@ -85,8 +87,16 @@ export function buildPipelineSteps(status: RecordStatus, events: readonly Record
       // Nothing has picked the record up yet: it is queued, not running.
       state = 'pending'
       if (steps.length === 0) note = 'Queued: waiting for the worker'
-    } else if (IN_PROGRESS.includes(status) && !steps.some((entry) => entry.state === 'current')) {
-      state = 'current'
+    } else if (IN_PROGRESS.includes(status) && !steps.some((entry) => entry.state === 'current') && !steps.some((entry) => entry.note?.startsWith('Queued'))) {
+      // The status names the step that is running. When that step has already finished, the record sits between
+      // two steps: the next job is queued and the worker has not started it yet, so it is waiting, not running.
+      const runningIndex = STATUS_STEP[status]
+      if (runningIndex !== undefined && runningIndex < position) {
+        state = 'pending'
+        note = 'Queued: waiting for the worker'
+      } else {
+        state = 'current'
+      }
     } else if (IN_PROGRESS.includes(status)) {
       state = 'pending'
     } else {
