@@ -89,5 +89,5 @@ Tech stack (fixed):
 - **Frontend:** Next.js 14 (App Router)
 - **Backend:** Next.js API Routes
 - **Database:** Supabase (PostgreSQL + Auth + Storage)
-- **AI:** Anthropic Claude API
+- **AI:** OpenAI API (or Azure OpenAI for in-region data)
 - **UI:** Lucide React icons, Inter + JetBrains Mono fonts
