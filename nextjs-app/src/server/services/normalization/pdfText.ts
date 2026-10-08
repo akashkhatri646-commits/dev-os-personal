@@ -1,5 +1,6 @@
 import 'server-only'
 import { AppError } from '@/lib/api/errors'
+import { logger } from '@/server/logger'
 import type { NormalizedBlock } from '@/types/documents'
 import { DIGITAL_TEXT_CONFIDENCE, type OcrPage } from '@/types/ocr'
 
@@ -66,13 +67,33 @@ function lineToBlock(line: Line, pageNumber: number, index: number, width: numbe
   }
 }
 
+const errorName = (error: unknown) => (error instanceof Error ? error.name : typeof error)
+/** The library's own message (for example "Cannot find module ...pdf.worker.mjs"); it never contains document text. */
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message.slice(0, 300) : '')
+
+/**
+ * Loads pdf.js together with its worker. The library normally finds the worker by a computed file path at run time,
+ * which hosting bundlers (Netlify) do not trace, so the file is missing from the deployed function and every PDF
+ * fails to open. Importing it by name here makes it part of the bundle, and handing it to pdf.js through
+ * `globalThis.pdfjsWorker` is the documented way to skip the file lookup.
+ */
+async function loadPdfjs() {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const shared = globalThis as { pdfjsWorker?: unknown }
+  if (!shared.pdfjsWorker) {
+    // @ts-expect-error pdf.js ships no type declarations for its worker module.
+    shared.pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs')
+  }
+  return pdfjs
+}
+
 /**
  * Reads the embedded text layer of a PDF. Returns `pages: null` when the layer is too thin to rely
  * on (a scan), so the caller routes the document to OCR. Corrupt or encrypted files raise
  * `unreadable_document`, which needs a new upload rather than a retry.
  */
 export async function extractPdfText(bytes: Buffer): Promise<PdfTextResult> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdfjs = await loadPdfjs()
 
   let document
   try {
@@ -83,7 +104,8 @@ export async function extractPdfText(bytes: Buffer): Promise<PdfTextResult> {
       disableFontFace: true,
       verbosity: 0,
     }).promise
-  } catch {
+  } catch (error) {
+    logger.warn({ stage: 'open', error_name: errorName(error), error_message: errorMessage(error) }, 'pdf could not be opened')
     throw new AppError('VALIDATION_FAILED', 'The PDF could not be read.', { reason: 'unreadable_document' })
   }
 
@@ -110,7 +132,8 @@ export async function extractPdfText(bytes: Buffer): Promise<PdfTextResult> {
       pages: charsPerPage >= MIN_CHARS_PER_PAGE ? pages : null,
       charsPerPage,
     }
-  } catch {
+  } catch (error) {
+    logger.warn({ stage: 'read', error_name: errorName(error), error_message: errorMessage(error) }, 'pdf text could not be read')
     throw new AppError('VALIDATION_FAILED', 'The PDF could not be read.', { reason: 'unreadable_document' })
   } finally {
     await document.destroy()
