@@ -37,6 +37,8 @@ export interface TickSummary {
   released: number
   /** Records found without any job and re-queued. */
   recovered: number
+  /** True when the pass stopped because its time ran out while work was still being found: another pass should follow. */
+  more: boolean
 }
 
 export interface TickOptions {
@@ -138,7 +140,7 @@ async function applyOutcome(job: JobRow, record: RecordRow, outcome: StageOutcom
   }
 }
 
-async function runJob(job: JobRow): Promise<keyof Omit<TickSummary, 'claimed' | 'recovered'>> {
+async function runJob(job: JobRow): Promise<'succeeded' | 'retried' | 'escalated' | 'failed' | 'released'> {
   const handler = STAGE_HANDLERS[job.stage]
   if (!handler) {
     await releaseJob(job)
@@ -178,7 +180,7 @@ export async function runTick(options: TickOptions): Promise<TickSummary> {
   const now = options.now ?? Date.now
   const startWindow = effectiveBudgetSeconds(options)
   const deadline = now() + startWindow * 1000
-  const summary: TickSummary = { claimed: 0, succeeded: 0, retried: 0, escalated: 0, failed: 0, released: 0, recovered: 0 }
+  const summary: TickSummary = { claimed: 0, succeeded: 0, retried: 0, escalated: 0, failed: 0, released: 0, recovered: 0, more: false }
 
   summary.recovered = await recoverOrphans()
   await sweepExpiredReviewLocks()
@@ -204,6 +206,7 @@ export async function runTick(options: TickOptions): Promise<TickSummary> {
     }
     // Only handed-back jobs: claiming again would return the same ones.
     if (!progressed) break
+    if (now() >= deadline) summary.more = true
   } while (now() < deadline)
   return summary
 }

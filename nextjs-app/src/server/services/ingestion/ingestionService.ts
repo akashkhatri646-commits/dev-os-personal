@@ -286,7 +286,7 @@ export async function submitIngestion(
     if (!result.duplicate) anyNew = true
   }
 
-  if (anyNew) triggerWorkerTick()
+  if (anyNew) await triggerWorkerTick()
   if (!first) throw new AppError('VALIDATION_FAILED', 'No messages were found in the submission.')
   return { record_id: first.record_id, status: first.status, duplicate: !anyNew, record_ids: results }
 }
@@ -543,7 +543,7 @@ export async function retryRecord(actor: AuthUser, id: string, body: RetryBody):
   if (!record) throw new AppError('NOT_FOUND', 'Record not found.')
   await setStatus(record, STAGE_STATUS[stage], { retry: true, reason: 'manual_retry' })
   await enqueueJob(id, stage)
-  triggerWorkerTick()
+  await triggerWorkerTick()
 
   const refreshed = await loadOwnedRecord(actor, id)
   return toSummary(summaryRowSchema.parse(refreshed))
@@ -590,7 +590,7 @@ export async function rerunRecord(actor: AuthUser, id: string, fromStage: JobSta
   })
   await setStatus(record, STAGE_STATUS[fromStage], { retry: true, reason: 'admin_rerun' })
   await enqueueJob(id, fromStage)
-  triggerWorkerTick()
+  await triggerWorkerTick()
 
   return toSummary(summaryRowSchema.parse(await loadOwnedRecord(actor, id)))
 }

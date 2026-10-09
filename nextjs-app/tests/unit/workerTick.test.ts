@@ -171,6 +171,18 @@ describe('runTick', () => {
     expect(summary.released).toBe(2)
   })
 
+  it('says another pass should follow when time ran out after real work, and not when the queue is empty', async () => {
+    STAGE_HANDLERS.consent_check = vi.fn().mockResolvedValue({ kind: 'advance' })
+    jobs.claimJobs.mockResolvedValueOnce([job()])
+    // Inside the budget when the job starts, past it afterwards.
+    let calls = 0
+    const now = () => (calls++ < 2 ? 0 : 1_000_000)
+    expect((await runTick({ ...options, now })).more).toBe(true)
+
+    jobs.claimJobs.mockReset().mockResolvedValue([])
+    expect((await runTick(options)).more).toBe(false)
+  })
+
   it('re-queues records that were created but never queued', async () => {
     orphanResult = () => ({ data: [{ id: 'orphan-1' }, { id: 'orphan-2' }], error: null })
     jobs.recordHasJob.mockImplementation(async (id: string) => id === 'orphan-2')
