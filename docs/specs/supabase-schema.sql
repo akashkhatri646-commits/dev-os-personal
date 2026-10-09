@@ -104,6 +104,7 @@ create table public.provider_sources (
   pause_reason         text,
   eval_status          eval_status_t not null default 'none',
   eval_passed_at       timestamptz,
+  eval_basis           text check (eval_basis in ('synthetic','real')),   -- migration 0010
   holdback_pct         numeric(5,2) not null default 10 check (holdback_pct between 0 and 100),
   flagged_poor         boolean not null default false,
   created_by           uuid references public.profiles(id),
@@ -169,6 +170,7 @@ create table public.eval_runs (
   metrics    jsonb not null default '{}',
   passed     boolean not null,
   sample_count int not null default 0,
+  basis      text check (basis in ('synthetic','real')),   -- migration 0010
   ran_at     timestamptz not null default now()
 );
 create index idx_eval_runs_kind on public.eval_runs(org_id, kind, ran_at desc);

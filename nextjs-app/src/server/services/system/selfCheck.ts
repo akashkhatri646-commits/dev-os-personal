@@ -37,6 +37,7 @@ const TABLES = [
 const MIGRATION_COLUMNS = [
   { migration: '0004_mapped_resource_flags', table: 'mapped_resources', column: 'flags' },
   { migration: '0005_mapped_resource_source_ref', table: 'mapped_resources', column: 'source_ref' },
+  { migration: '0010_source_evaluation', table: 'provider_sources', column: 'eval_basis' },
 ]
 
 /**

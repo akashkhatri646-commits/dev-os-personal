@@ -9,6 +9,7 @@ export const queryKeys = {
   // Invalidating `sources` still refreshes it, because the keys share a prefix.
   sourceOptions: ['sources', 'options'] as const,
   records: ['records'] as const,
+  sourceEvaluation: (sourceId: string, days: number | null) => ['source-evaluation', sourceId, days] as const,
   consentArtifacts: ['consent-artifacts'] as const,
   audit: (filters: unknown) => ['audit', filters] as const,
   source: (id: string) => ['source', id] as const,

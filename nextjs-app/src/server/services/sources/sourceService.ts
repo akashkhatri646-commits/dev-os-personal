@@ -1,3 +1,4 @@
+import { assertEvaluationCurrent, resetEvaluation } from '@/server/services/evaluation/evaluationService'
 import 'server-only'
 import { z } from 'zod'
 import { AppError } from '@/lib/api/errors'
@@ -42,6 +43,7 @@ const sourceRowSchema = z.object({
   pause_reason: z.string().nullable(),
   eval_status: z.enum(['none', 'passed', 'failed']),
   eval_passed_at: z.string().nullable(),
+  eval_basis: z.enum(['synthetic', 'real']).nullable().default(null),
   holdback_pct: z.coerce.number(),
   flagged_poor: z.boolean(),
   created_at: z.string(),
@@ -59,7 +61,7 @@ const thresholdRowSchema = z.object({
 })
 
 const SOURCE_COLUMNS =
-  'id, name, provider_type, size_class, region, primary_language, doc_types, consent_regime, auto_commit_enabled, pause_reason, eval_status, eval_passed_at, holdback_pct, flagged_poor, created_at'
+  'id, name, provider_type, size_class, region, primary_language, doc_types, consent_regime, auto_commit_enabled, pause_reason, eval_status, eval_passed_at, eval_basis, holdback_pct, flagged_poor, created_at'
 
 const UNIQUE_VIOLATION = '23505'
 
@@ -147,6 +149,7 @@ function toSummary(
     auto_commit_enabled: row.auto_commit_enabled,
     pause_reason: row.pause_reason,
     eval_status: row.eval_status,
+    eval_basis: row.eval_basis,
     holdback_pct: row.holdback_pct,
     flagged_poor: row.flagged_poor,
     status: deriveStatus(row),
@@ -374,6 +377,8 @@ export async function setThreshold(
       version: result.version,
     },
   })
+  // A pass was earned under the old thresholds: it no longer covers the new ones.
+  await resetEvaluation({ orgId: actor.orgId, sourceId, actorId: actor.userId, reason: 'thresholds_changed' })
   return result
 }
 
@@ -439,6 +444,7 @@ export async function enableAutoCommit(actor: AuthUser, id: string, note: string
       reason: 'EVAL_NOT_PASSED',
     })
   }
+  await assertEvaluationCurrent(actor.orgId, id)
   const { error } = await getSupabaseAdmin()
     .from('provider_sources')
     .update({ auto_commit_enabled: true })
@@ -486,6 +492,7 @@ export async function resumeSource(actor: AuthUser, id: string, note: string): P
       reason: 'EVAL_NOT_PASSED',
     })
   }
+  await assertEvaluationCurrent(actor.orgId, id)
 
   const admin = getSupabaseAdmin()
   const { data: incidents, error: incidentError } = await admin

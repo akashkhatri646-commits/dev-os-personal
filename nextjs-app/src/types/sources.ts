@@ -1,4 +1,5 @@
 import type { DocType } from '@/types/domain'
+import type { EvalBasis } from '@/types/evaluation'
 
 export type SourceStatus = 'manual_only' | 'auto_commit' | 'paused'
 export type EvalStatus = 'none' | 'passed' | 'failed'
@@ -16,6 +17,8 @@ export interface SourceSummary {
   auto_commit_enabled: boolean
   pause_reason: string | null
   eval_status: EvalStatus
+  /** The kind of data a passed evaluation covered. */
+  eval_basis: EvalBasis | null
   holdback_pct: number
   flagged_poor: boolean
   status: SourceStatus

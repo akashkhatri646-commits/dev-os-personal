@@ -50,6 +50,8 @@ export const AUDIT_EVENTS = [
   'prompt.rolled_back',
   'worker.job_failed',
   'record.rerun_requested',
+  'source.eval_run',
+  'source.eval_reset',
 ] as const
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number]

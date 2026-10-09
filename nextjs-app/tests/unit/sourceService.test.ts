@@ -47,6 +47,7 @@ vi.mock('@/server/config/constants', () => ({
     highRiskThreshold: 0.99,
   }),
 }))
+vi.mock('@/server/services/evaluation/evaluationService', () => ({ assertEvaluationCurrent: vi.fn(), resetEvaluation: vi.fn() }))
 vi.mock('@/server/services/audit/auditLog', () => ({
   appendAudit: (...args: unknown[]) => appendAudit(...args),
 }))
@@ -178,6 +179,14 @@ describe('setThreshold', () => {
         payload: { source_id: 's-1', resource_type: 'Condition', old: 0.97, new: 0.95, version: 2 },
       }),
     )
+  })
+
+  it('clears a passed evaluation, because the pass was earned under the old thresholds', async () => {
+    const { resetEvaluation } = await import('@/server/services/evaluation/evaluationService')
+    stubSource()
+    rpcResults.set_routing_threshold = { data: [{ version: 3, previous: 0.97 }], error: null }
+    await setThreshold(actor, 's-1', { resource_type: 'Condition', threshold: 0.96, reason: 'tuned' })
+    expect(resetEvaluation).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 's-1', reason: 'thresholds_changed' }))
   })
 
   it('returns 404 for a source outside the organisation', async () => {

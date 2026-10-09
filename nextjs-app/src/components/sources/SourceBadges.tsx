@@ -1,4 +1,5 @@
 import { CheckCircle2, CircleSlash, PauseCircle, XCircle, Hand } from 'lucide-react'
+import type { EvalBasis } from '@/types/evaluation'
 import type { EvalStatus, SourceStatus } from '@/types/sources'
 
 const STATUS: Record<SourceStatus, { label: string; className: string; Icon: typeof Hand }> = {
@@ -23,12 +24,12 @@ const EVAL: Record<EvalStatus, { label: string; className: string; Icon: typeof 
   failed: { label: 'Eval failed', className: 'badge-danger', Icon: XCircle },
 }
 
-export function EvalStatusBadge({ status }: { status: EvalStatus }) {
+export function EvalStatusBadge({ status, basis }: { status: EvalStatus; basis?: EvalBasis | null }) {
   const { label, className, Icon } = EVAL[status]
   return (
     <span className={className}>
       <Icon aria-hidden="true" className="h-3 w-3" />
-      {label}
+      {status === 'passed' && basis ? `${label} (${basis})` : label}
     </span>
   )
 }
