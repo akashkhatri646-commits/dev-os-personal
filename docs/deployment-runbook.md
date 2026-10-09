@@ -99,7 +99,7 @@ Leave unset: `LLM_MODEL_LIGHT`, `EMBEDDINGS_MODEL`, `OCR_PROVIDER` (see the syst
 ## 10. Verify
 1. Admin → System check. Everything is OK or one of the expected warnings (OCR, embeddings, automatic commit off). "Broken" items name what to fix. Press "Test the model": all checks pass.
 2. Sources → create a source, then Admin → Consent (stub) → add a consent for a test patient.
-3. Ingest a typed PDF (use the discharge summary). Within about two minutes it reaches "Needs review" with no manual action. If it sits in "Received" for more than 3 minutes: Netlify → Functions → `worker-tick` logs. Scheduled functions run only on the published production deploy.
+3. Ingest a typed PDF (use the discharge summary). Within about two minutes it reaches "Needs review" with no manual action. If it sits in "Received" for more than 3 minutes: Netlify → Logs & metrics → Functions → `worker-tick`. Scheduled functions run only on the published production deploy.
 4. Open the record: fields, dates, codes and the pipeline row agree with the status. As a reviewer approve it; the Audit page shows the chain.
 5. Admin → re-run from "Extract fields" on another record; the timeline resets and finishes.
 6. Sign out, reopen the site: the sign-in page appears. Enter a wrong password 11 times in a minute: rate-limited.
@@ -107,7 +107,7 @@ Leave unset: `LLM_MODEL_LIGHT`, `EMBEDDINGS_MODEL`, `OCR_PROVIDER` (see the syst
 ## 11. If something goes wrong
 | Symptom | Look at |
 |---|---|
-| Record stuck in "Received" | System check "Waiting jobs"; Netlify Functions → `worker-tick` and `worker-run` logs; `WORKER_SECRET` and `APP_BASE_URL` set with Functions scope |
+| Record stuck in "Received" | System check "Waiting jobs"; Netlify Functions → `worker-tick` log (each minute it prints the result of a pass, or says why it failed); `WORKER_SECRET` and `APP_BASE_URL` set with Functions scope |
 | "Worker time limit" warning | Set `WORKER_HOST_LIMIT_SECONDS=60`, `LLM_REQUEST_TIMEOUT_MS=35000`, redeploy |
 | Sign-in works but pages bounce back to sign-in | Supabase Site URL and Redirect URLs do not match the live address |
 | 500 on ingest naming a variable | One of the four secrets in step 5 is missing |
