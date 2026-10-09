@@ -82,3 +82,14 @@ export type SetThresholdInput = z.infer<typeof setThresholdSchema>
 export const noteBodySchema = z.object({ note: safeNote(5) })
 export const reasonBodySchema = z.object({ reason: safeNote(5) })
 export const flagPoorSchema = z.object({ note: safeNote(5) })
+
+/** Query of the evaluation view: the period to look back over, in days (all time when omitted). */
+export const evaluationQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(3650).optional(),
+})
+
+/** Body of "run evaluation": what kind of data the reviewed records are, so a pass is never shown without it. */
+export const runEvaluationBodySchema = z.object({
+  basis: z.enum(['synthetic', 'real']),
+  note: z.string().trim().max(500).optional(),
+})

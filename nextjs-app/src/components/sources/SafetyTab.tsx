@@ -44,7 +44,7 @@ const COPY: Record<Action, { title: string; description: string; confirm: string
   },
 }
 
-export function SafetyTab({ source }: { source: SourceDetail }) {
+export function SafetyTab({ source, onOpenEvaluation }: { source: SourceDetail; onOpenEvaluation?: () => void }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [action, setAction] = useState<Action | null>(null)
@@ -71,7 +71,7 @@ export function SafetyTab({ source }: { source: SourceDetail }) {
         </h2>
         <div className="flex flex-wrap items-center gap-3">
           <SourceStatusBadge status={source.status} />
-          <EvalStatusBadge status={source.eval_status} />
+          <EvalStatusBadge status={source.eval_status} basis={source.eval_basis} />
           <span className="text-body-sm text-text-secondary">Audit holdback: {source.holdback_pct}% of would-be auto-commits</span>
         </div>
 
@@ -98,8 +98,12 @@ export function SafetyTab({ source }: { source: SourceDetail }) {
           <div className="flex flex-col gap-0.5">
             <dt className="text-body-lg text-text-primary">Requirement</dt>
             <dd className="text-body-sm text-text-secondary">
-              Auto-commit needs at least 50 clinician-labeled records for this source to pass the evaluation. The
-              evaluation runs from the evaluation tooling, which arrives with the evaluation feature.
+              Auto-commit needs a passed evaluation, judged from what reviewers did with this source&apos;s records.{' '}
+              {onOpenEvaluation && (
+                <button type="button" className="text-brand underline" onClick={onOpenEvaluation}>
+                  Open the Evaluation tab
+                </button>
+              )}
             </dd>
           </div>
         </dl>
@@ -119,7 +123,7 @@ export function SafetyTab({ source }: { source: SourceDetail }) {
                 type="button"
                 className="btn-primary"
                 disabled={!evalPassed}
-                title={evalPassed ? undefined : 'The onboarding evaluation must pass first'}
+                title={evalPassed ? undefined : 'A passed evaluation is required first: see the Evaluation tab'}
                 onClick={() => setAction('enable')}
               >
                 <ShieldCheck aria-hidden="true" className="h-4 w-4" />
@@ -137,7 +141,7 @@ export function SafetyTab({ source }: { source: SourceDetail }) {
                 type="button"
                 className="btn-primary"
                 disabled={!evalPassed}
-                title={evalPassed ? undefined : 'The onboarding evaluation must pass first'}
+                title={evalPassed ? undefined : 'A passed evaluation is required first: see the Evaluation tab'}
                 onClick={() => setAction('resume')}
               >
                 <PlayCircle aria-hidden="true" className="h-4 w-4" />

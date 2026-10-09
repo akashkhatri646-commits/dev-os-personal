@@ -43,6 +43,8 @@ const MATRIX: [string, Method, readonly Role[]][] = [
   ['api/sources/[id]/thresholds/history/route.ts', 'GET', IE_ADMIN],
   ['api/sources/[id]/enable-auto-commit/route.ts', 'POST', ADMIN],
   ['api/sources/[id]/pause/route.ts', 'POST', ADMIN],
+  ['api/sources/[id]/evaluation/route.ts', 'GET', IE_ADMIN],
+  ['api/sources/[id]/run-eval/route.ts', 'POST', ADMIN],
   ['api/sources/[id]/resume/route.ts', 'POST', ADMIN],
   ['api/sources/[id]/rotate-key/route.ts', 'POST', ADMIN],
   ['api/sources/[id]/flag-poor/route.ts', 'POST', REVIEWER_ADMIN],

@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { ApiKeyDialog } from '@/components/sources/ApiKeyDialog'
 import { EditSourceDialog } from '@/components/sources/EditSourceDialog'
+import { EvaluationTab } from '@/components/sources/EvaluationTab'
 import { SafetyTab } from '@/components/sources/SafetyTab'
 import { EvalStatusBadge, SourceStatusBadge } from '@/components/sources/SourceBadges'
 import { ThresholdsTab } from '@/components/sources/ThresholdsTab'
@@ -25,6 +26,7 @@ import type { SourceDetail } from '@/types/sources'
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'thresholds', label: 'Thresholds' },
+  { id: 'evaluation', label: 'Evaluation' },
   { id: 'safety', label: 'Safety' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
@@ -103,7 +105,7 @@ export function SourceDetailView({ sourceId }: { sourceId: string }) {
           actions={
             <>
               <SourceStatusBadge status={source.status} />
-              <EvalStatusBadge status={source.eval_status} />
+              <EvalStatusBadge status={source.eval_status} basis={source.eval_basis} />
             </>
           }
         />
@@ -128,8 +130,11 @@ export function SourceDetailView({ sourceId }: { sourceId: string }) {
       <TabPanel id="thresholds" active={tab}>
         <ThresholdsTab source={source} />
       </TabPanel>
+      <TabPanel id="evaluation" active={tab}>
+        <EvaluationTab source={source} />
+      </TabPanel>
       <TabPanel id="safety" active={tab}>
-        <SafetyTab source={source} />
+        <SafetyTab source={source} onOpenEvaluation={() => selectTab('evaluation')} />
       </TabPanel>
     </div>
   )

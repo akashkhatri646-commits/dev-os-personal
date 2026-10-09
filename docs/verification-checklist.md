@@ -206,3 +206,12 @@ select '<AUTH_USER_UUID>', (select id from public.organizations limit 1), lower(
 - [ ] Sign in with a wrong password 11 times within a minute: the 11th answer is "Too many requests" with a retry time.
 - [ ] Sign out from the top bar: you land on the sign-in page and the Audit page shows `auth.logout`.
 - [ ] The Supabase dashboard settings listed in `docs/security/security-plan.md` are done (sign-ups disabled first).
+
+## Source evaluation
+- [ ] Run `supabase/migrations/0010_source_evaluation.sql` in the SQL Editor of every project that was created before it (System check shows "Migration 0010_source_evaluation" as applied). Without it the Sources pages fail.
+- [ ] Open a source -> **Evaluation** tab. With no reviewed records it says "Nothing to evaluate yet" and explains what to do.
+- [ ] Review a few records (accept some fields, correct one, reject one). The tab shows counts, accuracy by field and resource type, and a calibration table. The verdict is "Not enough evidence yet" and **Run evaluation** answers that more records are needed.
+- [ ] To see a pass without 50 reviews, temporarily set `EVAL_MIN_RECORDS=3`, `EVAL_MIN_FIELDS=15`, `EVAL_TARGET_ACCURACY=0.5`, `EVAL_TARGET_ACCURACY_OTHER=0.5` (Netlify variables + redeploy). Run the evaluation as admin, choose the basis. The source shows "Eval passed (synthetic)" and **Enable auto-commit** works. Remove the variables afterwards.
+- [ ] Change a threshold on that source: the pass clears (badge "Not evaluated"), auto-commit is switched off, and the Audit page shows `source.eval_reset`.
+- [ ] Change `LLM_MODEL_EXTRACTION` after a pass: the Evaluation tab warns, and Enable/Resume answer "evaluation passed for a different model".
+

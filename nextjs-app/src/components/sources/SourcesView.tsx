@@ -71,7 +71,7 @@ export function SourcesView() {
         id: 'eval',
         header: 'Evaluation',
         accessorKey: 'eval_status',
-        cell: ({ row }) => <EvalStatusBadge status={row.original.eval_status} />,
+        cell: ({ row }) => <EvalStatusBadge status={row.original.eval_status} basis={row.original.eval_basis} />,
       },
       {
         id: 'queue',

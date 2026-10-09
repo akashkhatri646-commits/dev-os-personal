@@ -111,6 +111,14 @@ const envSchema = z.object({
   ALERT_STP_DELTA_POINTS: numberWithDefault(5),
   ALERT_ESCALATION_PRECISION_MIN: numberWithDefault(0.6),
   ALERT_CORRECTION_RATE_MAX: numberWithDefault(0.01),
+
+  // Source evaluation bar (docs/specs/17-source-evaluation.md)
+  EVAL_MIN_RECORDS: numberWithDefault(50),
+  EVAL_MIN_FIELDS: numberWithDefault(300),
+  EVAL_TARGET_ACCURACY: numberWithDefault(0.99),
+  EVAL_TARGET_ACCURACY_OTHER: numberWithDefault(0.97),
+  EVAL_TARGET_CODE_ACCURACY: numberWithDefault(0.95),
+  EVAL_MIN_RESOURCES_AT_THRESHOLD: numberWithDefault(30),
 })
 
 export type Env = z.infer<typeof envSchema>
