@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { jobs, orchestrator, breaker } = vi.hoisted(() => ({
   jobs: {
     claimJobs: vi.fn(),
+    reclaimStaleJobs: vi.fn().mockResolvedValue(0),
     completeJob: vi.fn(),
     enqueueJob: vi.fn(),
     recordHasJob: vi.fn(),

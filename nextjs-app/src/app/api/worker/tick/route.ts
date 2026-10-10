@@ -7,6 +7,9 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+/** A pass hands over to the next one with time to spare, and waits just long enough for the request to be accepted. */
+const CHAIN_WAIT_MS = 2500
+
 /** Runs one worker pass. Called by the scheduler, by the intake and by a pass that ran out of time; authenticated by WORKER_SECRET. */
 export const POST = route<TickSummary>({
   public: true,
@@ -15,7 +18,7 @@ export const POST = route<TickSummary>({
     const summary = await runTick(tickOptionsFromEnv())
     // Out of time with work still arriving (a record's next stage was just queued): carry on right away instead of
     // waiting for the next scheduled call.
-    if (summary.more) await triggerWorkerTick()
+    if (summary.more) await triggerWorkerTick({ waitMs: CHAIN_WAIT_MS })
     return ok(summary)
   },
 })

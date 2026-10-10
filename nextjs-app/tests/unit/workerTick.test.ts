@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { jobs, orchestrator } = vi.hoisted(() => ({
   jobs: {
     claimJobs: vi.fn(),
+    reclaimStaleJobs: vi.fn().mockResolvedValue(0),
     completeJob: vi.fn(),
     enqueueJob: vi.fn(),
     recordHasJob: vi.fn(),
@@ -241,13 +242,71 @@ describe('effectiveBudgetSeconds', () => {
     expect(effectiveBudgetSeconds({ maxSeconds: 50 })).toBe(50)
   })
 
-  it('shortens the start window so a model call begun at its end still fits the host limit', async () => {
+  it('never goes past the host limit less a safety margin', async () => {
     const { effectiveBudgetSeconds } = await import('@/server/worker/tick')
-    // 60 s host limit - 35 s model call - 5 s margin = 20 s to start jobs in.
-    expect(effectiveBudgetSeconds({ maxSeconds: 50, hostLimitSeconds: 60, modelTimeoutMs: 35_000 })).toBe(20)
-    // A short budget is never lengthened.
-    expect(effectiveBudgetSeconds({ maxSeconds: 10, hostLimitSeconds: 60, modelTimeoutMs: 35_000 })).toBe(10)
-    // A model timeout that cannot fit still lets one job start.
-    expect(effectiveBudgetSeconds({ maxSeconds: 50, hostLimitSeconds: 60, modelTimeoutMs: 60_000 })).toBe(1)
+    expect(effectiveBudgetSeconds({ maxSeconds: 50, hostLimitSeconds: 26 })).toBe(18)
+    expect(effectiveBudgetSeconds({ maxSeconds: 90, hostLimitSeconds: 60 })).toBe(52)
+    expect(effectiveBudgetSeconds({ maxSeconds: 10, hostLimitSeconds: 26 })).toBe(10)
+  })
+})
+
+describe('the host limit the worker plans for', () => {
+  it('assumes the Free-plan limit on a hosted site unless a longer one has been confirmed', async () => {
+    const { plannedHostLimitSeconds } = await import('@/server/worker/tick')
+    expect(plannedHostLimitSeconds(undefined, false, false)).toBeUndefined()
+    expect(plannedHostLimitSeconds(undefined, false, true)).toBe(26)
+    expect(plannedHostLimitSeconds(60, false, true)).toBe(26)
+    expect(plannedHostLimitSeconds(60, true, true)).toBe(60)
+    expect(plannedHostLimitSeconds(15, false, true)).toBe(15)
+  })
+})
+
+describe('time reserved per stage on a host with a hard limit', () => {
+  const hosted = { ...options, maxSeconds: 50, hostLimitSeconds: 26, modelTimeoutMs: 20_000 }
+  /** 0 ms on the first reading (the start of the pass), 5 s on every later one. */
+  const clockAt5s = () => {
+    let calls = 0
+    return () => (calls++ === 0 ? 0 : 5_000)
+  }
+
+  it('reserves the model timeout for a model stage, a little for reading a document, and nothing for quick stages', async () => {
+    const { stageReserveSeconds } = await import('@/server/worker/tick')
+    expect(stageReserveSeconds('extract', 20_000)).toBe(23)
+    expect(stageReserveSeconds('map', 20_000)).toBe(23)
+    expect(stageReserveSeconds('normalize', 20_000)).toBe(10)
+    for (const stage of ['consent_check', 'validate', 'score', 'route', 'commit'] as const) expect(stageReserveSeconds(stage, 20_000)).toBe(0)
+  })
+
+  it('starts quick stages late in a pass, but holds back a model stage that could not finish, and asks for another pass', async () => {
+    const light = vi.fn().mockResolvedValue({ kind: 'advance' })
+    const model = vi.fn().mockResolvedValue({ kind: 'advance' })
+    STAGE_HANDLERS.consent_check = light
+    STAGE_HANDLERS.extract = model
+    jobs.claimJobs.mockResolvedValueOnce([job(), job({ id: 'job-2', stage: 'extract' })])
+    const summary = await runTick({ ...hosted, now: clockAt5s() })
+    expect(light).toHaveBeenCalledTimes(1)
+    expect(model).not.toHaveBeenCalled()
+    expect(jobs.releaseJob).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-2' }), 0)
+    expect(summary).toMatchObject({ succeeded: 1, released: 1, more: true })
+  })
+
+  it('starts the first job of a pass even when its reserve does not fit, so a pass can never be empty', async () => {
+    const model = vi.fn().mockResolvedValue({ kind: 'advance' })
+    STAGE_HANDLERS.map = model
+    jobs.claimJobs.mockResolvedValueOnce([job({ stage: 'map' })])
+    const summary = await runTick({ ...hosted, modelTimeoutMs: 120_000 })
+    expect(model).toHaveBeenCalledTimes(1)
+    expect(summary.released).toBe(0)
+  })
+
+  it('hands back jobs a cut-off pass left running before it claims new ones', async () => {
+    jobs.reclaimStaleJobs.mockResolvedValueOnce(1)
+    await runTick(hosted)
+    expect(jobs.reclaimStaleJobs).toHaveBeenCalledWith(36)
+  })
+
+  it('does not look for stranded jobs when there is no host limit (local development)', async () => {
+    await runTick(options)
+    expect(jobs.reclaimStaleJobs).not.toHaveBeenCalled()
   })
 })

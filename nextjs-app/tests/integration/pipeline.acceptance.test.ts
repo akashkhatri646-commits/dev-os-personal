@@ -12,10 +12,11 @@ const { holder, spies } = vi.hoisted(() => ({
     consent: null as unknown,
     env: {} as Record<string, unknown>,
   },
-  spies: { download: vi.fn(), llm: vi.fn(), alert: vi.fn(), consent: vi.fn() },
+  spies: { download: vi.fn(), llm: vi.fn(), alert: vi.fn(), consent: vi.fn(), trigger: vi.fn() },
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({ getSupabaseAdmin: () => holder.db.client() }))
+vi.mock('@/server/worker/trigger', () => ({ triggerWorkerTick: spies.trigger }))
 vi.mock('@/lib/supabase/server', () => ({ createSupabaseServerClient: () => holder.db.client() }))
 vi.mock('@/server/config/env', () => ({ getEnv: () => ({ ...BASE_ENV, ...holder.env }) }))
 vi.mock('@/server/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
@@ -55,8 +56,8 @@ vi.mock('@/server/services/terminology/search', async () => {
 })
 
 import { AppError } from '@/lib/api/errors'
-import { enqueueJob } from '@/server/queue/jobs'
-import { rerunRecord } from '@/server/services/ingestion/ingestionService'
+import { enqueueJob, reclaimStaleJobs } from '@/server/queue/jobs'
+import { kickRecord, rerunRecord } from '@/server/services/ingestion/ingestionService'
 import { runTick } from '@/server/worker/tick'
 import { DISCHARGE_FIELDS, DISCHARGE_TEXT, INJECTED_TEXT } from '../support/fixtures'
 import { BASE_ENV, ORG, PATIENT, VALID, createHarness } from '../support/pipelineHarness'
@@ -373,6 +374,50 @@ describe('idempotency and concurrency', () => {
     await drain()
     expect(holder.db.all('extracted_fields')).toHaveLength(count)
     expect(holder.db.table('mapped_resources').length).toBe(3)
+  })
+
+  describe('a pass cut off by the host', () => {
+    it('gives back a job left running, with its attempt, so the record moves on within a minute instead of five', async () => {
+      const id = await submit({ autoCommit: false })
+      const job = holder.db.table('pipeline_jobs').find((row) => row.record_id === id && row.status === 'queued')!
+      Object.assign(job, { status: 'running', attempts: 1, locked_at: new Date(Date.now() - 100_000).toISOString(), locked_by: 'dead-pass' })
+      const fresh = holder.db.seed('pipeline_jobs', { record_id: 'another-record', stage: 'normalize', status: 'running', attempts: 1, max_attempts: 2, run_at: new Date().toISOString(), locked_at: new Date().toISOString(), locked_by: 'live-pass' })[0]!
+
+      await expect(reclaimStaleJobs(36)).resolves.toBe(1)
+      expect(job).toMatchObject({ status: 'queued', attempts: 0, locked_by: null })
+      expect(fresh).toMatchObject({ status: 'running', locked_by: 'live-pass' })
+
+      await drain()
+      expect(record(id).status).toBe('needs_review')
+    })
+  })
+
+  describe('kick: the safety net for a lost hand-over between worker passes', () => {
+    const user = { userId: 'u-admin', orgId: ORG, role: 'admin', accessToken: 't', email: 'a@x.test' } as never
+    const dueJob = (id: string, secondsAgo: number) => {
+      const job = holder.db.table('pipeline_jobs').find((row) => row.record_id === id && row.status === 'queued')!
+      job.run_at = new Date(Date.now() - secondsAgo * 1000).toISOString()
+    }
+
+    it('starts a worker pass for a record whose next job has been due and idle for a while', async () => {
+      const id = await submit({ autoCommit: false })
+      dueJob(id, 30)
+      spies.trigger.mockClear()
+      await expect(kickRecord(user, id)).resolves.toEqual({ kicked: true })
+      expect(spies.trigger).toHaveBeenCalledTimes(1)
+    })
+
+    it('does nothing for a job that has only just become due, and for a record that is not waiting on the worker', async () => {
+      const id = await submit({ autoCommit: false })
+      dueJob(id, 1)
+      spies.trigger.mockClear()
+      await expect(kickRecord(user, id)).resolves.toEqual({ kicked: false })
+
+      await drain()
+      expect(record(id).status).toBe('needs_review')
+      await expect(kickRecord(user, id)).resolves.toEqual({ kicked: false })
+      expect(spies.trigger).not.toHaveBeenCalled()
+    })
   })
 
   describe('admin re-run', () => {

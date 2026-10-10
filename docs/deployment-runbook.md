@@ -65,8 +65,8 @@ Site configuration → Environment variables. Add each, scope: all (including Fu
 | `SUPABASE_SERVICE_ROLE_KEY` | production service-role key |
 | `SUPABASE_STORAGE_BUCKET` | `source-documents` |
 | `WORKER_SECRET`, `PATIENT_ID_HMAC_KEY`, `PATIENT_ID_ENC_KEY`, `SOURCE_KEY_PEPPER` | from step 5 |
-| `WORKER_HOST_LIMIT_SECONDS` | `60` |
-| `LLM_REQUEST_TIMEOUT_MS` | `35000` |
+| `WORKER_HOST_LIMIT_SECONDS` | `26` (Netlify Free web-function limit) |
+| `LLM_REQUEST_TIMEOUT_MS` | `20000` |
 | `WORKER_TICK_MAX_SECONDS` | `50` |
 | `LLM_PROVIDER` | `openai` (or `azure_openai`) |
 | `OPENAI_API_KEY` | a **new** key for production, with a spend limit set in the OpenAI dashboard |
@@ -108,7 +108,7 @@ Leave unset: `LLM_MODEL_LIGHT`, `EMBEDDINGS_MODEL`, `OCR_PROVIDER` (see the syst
 | Symptom | Look at |
 |---|---|
 | Record stuck in "Received" | System check "Waiting jobs"; Netlify Functions → `worker-tick` log (each minute it prints the result of a pass, or says why it failed); `WORKER_SECRET` and `APP_BASE_URL` set with Functions scope |
-| "Worker time limit" warning | Set `WORKER_HOST_LIMIT_SECONDS=60`, `LLM_REQUEST_TIMEOUT_MS=35000`, redeploy |
+| "Worker time limit" warning or records that stall | Set `WORKER_HOST_LIMIT_SECONDS=26`, `LLM_REQUEST_TIMEOUT_MS=20000`, redeploy once. Netlify Free cuts a web function at about 26 s |
 | Sign-in works but pages bounce back to sign-in | Supabase Site URL and Redirect URLs do not match the live address |
 | 500 on ingest naming a variable | One of the four secrets in step 5 is missing |
 | Anything else | Admin → System check first; then Netlify Functions logs |

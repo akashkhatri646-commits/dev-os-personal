@@ -50,6 +50,34 @@ export async function claimJobs(limit: number, workerId: string): Promise<JobRow
   return z.array(jobRowSchema).parse(data ?? [])
 }
 
+/**
+ * Gives back jobs left "running" by a pass the host cut off. The database only recovers such jobs after 5 minutes;
+ * a job cannot legitimately run longer than the host's time limit, so a short cut-off (limit plus a margin) is safe
+ * and gets a stranded record moving again within a minute. Each reclaimed job gets its attempt back. Returns how many.
+ */
+export async function reclaimStaleJobs(staleAfterSeconds: number): Promise<number> {
+  const admin = getSupabaseAdmin()
+  const cutoff = new Date(Date.now() - staleAfterSeconds * 1000).toISOString()
+  const { data, error } = await admin.from('pipeline_jobs').select('id, attempts').eq('status', 'running').lt('locked_at', cutoff).limit(50)
+  if (error) throw new AppError('INTERNAL', 'Failed to look for stranded jobs.', { cause: error, retryable: true })
+  for (const row of data ?? []) {
+    const { error: updateError } = await admin
+      .from('pipeline_jobs')
+      .update({
+        status: 'queued',
+        locked_at: null,
+        locked_by: null,
+        attempts: Math.max(0, Number(row.attempts) - 1),
+        run_at: new Date().toISOString(),
+        last_error: 'Reclaimed: the worker pass running it was cut off',
+      })
+      .eq('id', row.id as string)
+      .eq('status', 'running')
+    if (updateError) throw new AppError('INTERNAL', 'Failed to reclaim a stranded job.', { cause: updateError, retryable: true })
+  }
+  return (data ?? []).length
+}
+
 export async function completeJob(jobId: string): Promise<void> {
   const { error } = await getSupabaseAdmin()
     .from('pipeline_jobs')
