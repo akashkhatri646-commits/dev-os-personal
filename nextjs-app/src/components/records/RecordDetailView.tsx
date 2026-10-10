@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, History, Loader2, OctagonAlert, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AuditTimeline } from '@/components/audit/AuditTimeline'
 import { RoleGate } from '@/components/layout/RoleGate'
 import { PipelineTimeline } from '@/components/records/PipelineTimeline'
@@ -17,7 +17,7 @@ import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 import { TabPanel, Tabs } from '@/components/ui/Tabs'
 import { useToast } from '@/components/ui/Toaster'
 import { ApiError } from '@/lib/api/errors'
-import { fetchRecordDetail, fetchRecordTrace, retryRecord } from '@/lib/api/ingestions'
+import { fetchRecordDetail, fetchRecordTrace, kickRecord, retryRecord } from '@/lib/api/ingestions'
 import { queryKeys } from '@/lib/api/queryKeys'
 import { isRetryable, reasonLabel } from '@/lib/records/reasons'
 import type { RecordStatus } from '@/types/domain'
@@ -31,6 +31,10 @@ const TABS = [
   { id: 'source', label: 'Source' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
+
+/** A record that has not moved for this long is waiting on the worker: the page asks for a pass. */
+const KICK_AFTER_MS = 12_000
+const KICK_CHECK_MS = 4_000
 
 const PROCESSING: readonly RecordStatus[] = ['received', 'consent_check', 'normalizing', 'extracting', 'mapping', 'validating', 'scoring', 'routing']
 const DOC_LABEL = { discharge_summary: 'Discharge summary', lab_report: 'Lab report', other: 'Other' } as const
@@ -65,7 +69,29 @@ export function RecordDetailView({ recordId }: { recordId: string }) {
     retry: false,
     // Re-read when the record changes state (for example once it is committed).
     staleTime: 0,
+    // Fields, scores and resources appear as the stages finish.
+    refetchInterval: status && PROCESSING.includes(status) ? 5000 : false,
   })
+
+  // Safety net: if a record in progress has not moved for a while, ask the worker to run now. The server only acts
+  // when the record has a job that is due and idle, so this is harmless when the usual hand-over is working.
+  const progressKey = `${status ?? ''}|${detail.data?.events.length ?? 0}`
+  const lastProgress = useRef({ key: '', at: Date.now() })
+  if (lastProgress.current.key !== progressKey) lastProgress.current = { key: progressKey, at: Date.now() }
+  useEffect(() => {
+    if (!status || !PROCESSING.includes(status)) return undefined
+    const timer = setInterval(() => {
+      if (Date.now() - lastProgress.current.at < KICK_AFTER_MS) return
+      lastProgress.current = { ...lastProgress.current, at: Date.now() }
+      void kickRecord(recordId)
+        .then(async () => {
+          await queryClient.invalidateQueries({ queryKey: queryKeys.recordDetail(recordId) })
+          await queryClient.invalidateQueries({ queryKey: queryKeys.recordTrace(recordId) })
+        })
+        .catch(() => undefined)
+    }, KICK_CHECK_MS)
+    return () => clearInterval(timer)
+  }, [status, recordId, queryClient])
 
   const retry = useMutation({
     mutationFn: () => retryRecord(recordId),

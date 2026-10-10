@@ -74,6 +74,8 @@ const envSchema = z.object({
   WORKER_TICK_MAX_SECONDS: numberWithDefault(50),
   // Hard time limit of the host for one worker call (Netlify web routes: 60). Leave unset locally.
   WORKER_HOST_LIMIT_SECONDS: optionalNumber(),
+  // Set true only after /api/internal/limit-probe has shown that a pass can run longer than 26 s on this host.
+  WORKER_HOST_LIMIT_CONFIRMED: booleanWithDefault(false),
   JOB_MAX_ATTEMPTS: numberWithDefault(2),
   HOLDBACK_PCT_DEFAULT: numberWithDefault(10),
   DEFAULT_THRESHOLD: numberWithDefault(0.97),

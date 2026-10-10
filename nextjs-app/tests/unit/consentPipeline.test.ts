@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 const { jobs, orchestrator, consent, other } = vi.hoisted(() => ({
   jobs: {
     claimJobs: vi.fn(),
+    reclaimStaleJobs: vi.fn().mockResolvedValue(0),
     completeJob: vi.fn(),
     enqueueJob: vi.fn(),
     recordHasJob: vi.fn(),

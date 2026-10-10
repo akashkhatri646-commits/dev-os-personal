@@ -20,6 +20,7 @@ import {
   buryJob,
   claimJobs,
   completeJob,
+  reclaimStaleJobs,
   enqueueJob,
   recordHasJob,
   releaseJob,
@@ -46,8 +47,8 @@ export interface TickOptions {
   /** Soft budget: no new job starts after this many seconds. */
   maxSeconds: number
   /**
-   * Hard time limit of the host running the tick (Netlify: 60 s for a web route). A job started inside the budget
-   * may still run for a model call, so the budget is shortened to leave room for it.
+   * Hard time limit of the host running the tick (Netlify Free: about 26 s for a web route). The host kills a pass
+   * that runs past it, so a job only starts when it is expected to finish inside the limit less a safety margin.
    */
   hostLimitSeconds?: number
   /** Longest a single model call may take, in milliseconds. */
@@ -173,19 +174,29 @@ async function runJob(job: JobRow): Promise<'succeeded' | 'retried' | 'escalated
 }
 
 /**
- * One worker pass: recover orphaned records, claim due jobs and run them one at a time until the
- * time budget is spent. Jobs claimed but not started are released without using an attempt.
+ * One worker pass: recover orphaned records, then claim due jobs and run them until the time budget is spent. On a
+ * host with a hard time limit a job only starts when it can finish: a model stage needs the model timeout plus a
+ * margin, any other stage a short reserve. The first job of a pass always starts. Jobs claimed but not started are
+ * handed back without using an attempt, and `more` tells the caller to start another pass at once.
  */
 export async function runTick(options: TickOptions): Promise<TickSummary> {
   const now = options.now ?? Date.now
-  const startWindow = effectiveBudgetSeconds(options)
-  const deadline = now() + startWindow * 1000
+  const deadline = now() + effectiveBudgetSeconds(options) * 1000
   const summary: TickSummary = { claimed: 0, succeeded: 0, retried: 0, escalated: 0, failed: 0, released: 0, recovered: 0, more: false }
 
   summary.recovered = await recoverOrphans()
   await sweepExpiredReviewLocks()
+  // A pass the host cut off leaves its job "running": hand such jobs back at once instead of after the 5-minute rule.
+  if (options.hostLimitSeconds) {
+    const reclaimed = await reclaimStaleJobs(options.hostLimitSeconds + STALE_JOB_MARGIN_SECONDS)
+    if (reclaimed > 0) logger.warn({ reclaimed }, 'reclaimed jobs left running by a pass that was cut off')
+  }
 
   const workerId = options.workerId ?? `worker-${randomUUID()}`
+  const hosted = Boolean(options.hostLimitSeconds)
+  const reserveMs = (stage: JobStage) => (hosted ? stageReserveSeconds(stage, options.modelTimeoutMs) * 1000 : 0)
+  let ranAny = false
+
   // Keep claiming while there is time: finishing a stage queues the next one, and waiting a whole schedule
   // interval between stages would make every record take minutes.
   do {
@@ -193,40 +204,67 @@ export async function runTick(options: TickOptions): Promise<TickSummary> {
     if (jobs.length === 0) break
     summary.claimed += jobs.length
 
-    let progressed = false
+    let ranThisRound = false
     for (const job of jobs) {
-      if (now() >= deadline) {
+      const fits = !ranAny || now() + reserveMs(job.stage) <= deadline
+      if (now() >= deadline || !fits) {
         await releaseJob(job, 0)
         summary.released += 1
+        summary.more = true
         continue
       }
       const result = await runJob(job)
       summary[result] += 1
-      if (result !== 'released') progressed = true
+      if (result !== 'released') {
+        ranAny = true
+        ranThisRound = true
+      }
     }
-    // Only handed-back jobs: claiming again would return the same ones.
-    if (!progressed) break
-    if (now() >= deadline) summary.more = true
+    // Some job did not fit, or every job was handed back: claiming again would return the same ones.
+    if (summary.more || !ranThisRound) break
   } while (now() < deadline)
+  if (ranAny && now() >= deadline) summary.more = true
   return summary
 }
 
-/** The start window in seconds: the configured budget, shortened so a job started at the end still fits the host limit. */
-export function effectiveBudgetSeconds(options: Pick<TickOptions, 'maxSeconds' | 'hostLimitSeconds' | 'modelTimeoutMs'>): number {
+/** The pass's time budget in seconds: the configured budget, never past the host's hard limit less a safety margin. */
+export function effectiveBudgetSeconds(options: Pick<TickOptions, 'maxSeconds' | 'hostLimitSeconds'>): number {
   if (!options.hostLimitSeconds) return options.maxSeconds
-  const room = options.hostLimitSeconds - Math.ceil((options.modelTimeoutMs ?? 0) / 1000) - HOST_MARGIN_SECONDS
-  return Math.max(1, Math.min(options.maxSeconds, room))
+  return Math.max(1, Math.min(options.maxSeconds, options.hostLimitSeconds - HOST_MARGIN_SECONDS))
 }
 
-/** Slack for saving results, queue updates and starting the function. */
-const HOST_MARGIN_SECONDS = 5
+/** Slack for saving results, queue updates, starting the function and handing over to the next pass. */
+const HOST_MARGIN_SECONDS = 8
+/** A running job older than the host limit plus this many seconds belongs to a pass that no longer exists. */
+const STALE_JOB_MARGIN_SECONDS = 10
+/** Added to the model timeout when deciding whether a model stage still fits in this pass. */
+const MODEL_STAGE_MARGIN_SECONDS = 3
+/** Stages that call the model. */
+const MODEL_STAGES: readonly JobStage[] = ['extract', 'map']
+/** Reading a document (download and text extraction) is the slowest stage that makes no model call. */
+const NORMALIZE_RESERVE_SECONDS = 10
+
+/** Seconds a stage is expected to need at most: what must be left in the pass for it to start. Quick database-only stages need none. */
+export function stageReserveSeconds(stage: JobStage, modelTimeoutMs = 0): number {
+  if (MODEL_STAGES.includes(stage)) return Math.ceil(modelTimeoutMs / 1000) + MODEL_STAGE_MARGIN_SECONDS
+  return stage === 'normalize' ? NORMALIZE_RESERVE_SECONDS : 0
+}
+
+/** The host limit the worker plans for: the setting, never above the Free-plan limit unless it has been confirmed. */
+export function plannedHostLimitSeconds(setting: number | undefined, confirmed: boolean, hosted: boolean): number | undefined {
+  if (!hosted && setting === undefined) return undefined
+  const value = setting ?? FREE_PLAN_HOST_LIMIT_SECONDS
+  return confirmed ? value : Math.min(value, FREE_PLAN_HOST_LIMIT_SECONDS)
+}
+/** Netlify's web-function limit on the Free plan, assumed until a longer limit is confirmed. */
+const FREE_PLAN_HOST_LIMIT_SECONDS = 26
 
 export function tickOptionsFromEnv(): TickOptions {
   const env = getEnv()
   return {
     batchSize: env.WORKER_BATCH_SIZE,
     maxSeconds: env.WORKER_TICK_MAX_SECONDS,
-    hostLimitSeconds: env.WORKER_HOST_LIMIT_SECONDS,
+    hostLimitSeconds: plannedHostLimitSeconds(env.WORKER_HOST_LIMIT_SECONDS, env.WORKER_HOST_LIMIT_CONFIRMED, !/localhost|127\.0\.0\.1/.test(env.APP_BASE_URL)),
     modelTimeoutMs: env.LLM_REQUEST_TIMEOUT_MS,
   }
 }

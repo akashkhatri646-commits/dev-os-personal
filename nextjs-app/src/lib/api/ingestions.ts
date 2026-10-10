@@ -64,3 +64,8 @@ export async function fetchDocumentLink(id: string): Promise<{ url: string; expi
 export async function rerunRecord(id: string, fromStage: string): Promise<RecordSummary> {
   return (await apiFetch<RecordSummary>(`/api/admin/records/${id}/rerun`, { method: 'POST', body: JSON.stringify({ from_stage: fromStage }) })).data
 }
+
+/** Asks the worker to process a record that has been waiting. Quiet and safe to repeat. */
+export async function kickRecord(id: string): Promise<{ kicked: boolean }> {
+  return (await apiFetch<{ kicked: boolean }>(`/api/ingestions/${id}/kick`, { method: 'POST' })).data
+}

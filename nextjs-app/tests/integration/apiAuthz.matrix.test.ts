@@ -53,6 +53,7 @@ const MATRIX: [string, Method, readonly Role[]][] = [
   ['api/ingestions/[id]/trace/route.ts', 'GET', IE_REVIEWER_ADMIN],
   ['api/ingestions/[id]/document/route.ts', 'GET', IE_REVIEWER_ADMIN],
   ['api/ingestions/[id]/retry/route.ts', 'POST', IE_ADMIN],
+  ['api/ingestions/[id]/kick/route.ts', 'POST', ['integration_engineer', 'reviewer', 'admin']],
   ['api/review-tasks/route.ts', 'GET', REVIEWER_ADMIN],
   ['api/review-tasks/[id]/route.ts', 'GET', REVIEWER_ADMIN],
   ['api/review-tasks/[id]/claim/route.ts', 'POST', REVIEWER_ADMIN],
@@ -94,6 +95,7 @@ const SELF_AUTHENTICATED = [
   'api/ingestions/route.ts#POST',
   'api/internal/audit/verify/route.ts',
   'api/internal/config-check/route.ts',
+  'api/internal/limit-probe/route.ts',
   'api/worker/tick/route.ts',
   'auth/callback/route.ts',
 ]

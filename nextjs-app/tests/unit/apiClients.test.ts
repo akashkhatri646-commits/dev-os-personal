@@ -85,6 +85,7 @@ describe('client functions call the routes the server serves', () => {
     ['reconstruction', () => ingestions.fetchReconstruction('r1'), 'GET', '/api/audit/records/r1'],
     ['document link', () => ingestions.fetchDocumentLink('r1'), 'GET', '/api/ingestions/r1/document'],
     ['retry', () => ingestions.retryRecord('r1'), 'POST', '/api/ingestions/r1/retry'],
+    ['kick', () => ingestions.kickRecord('r1'), 'POST', '/api/ingestions/r1/kick'],
     ['evaluation', () => evaluation.fetchEvaluation('s1', 30), 'GET', '/api/sources/s1/evaluation?days=30'],
     ['run evaluation', () => evaluation.runSourceEvaluation('s1', 'synthetic'), 'POST', '/api/sources/s1/run-eval'],
     ['admin re-run', () => ingestions.rerunRecord('r1', 'map'), 'POST', '/api/admin/records/r1/rerun'],

@@ -1,0 +1,7 @@
+DISCHARGE SUMMARY
+Facility: Synthetic General Hospital.
+Admission date: 2025-06-15. Discharge date: 2025-06-20. Encounter class: inpatient. The patient was treated on the respiratory ward for a chest infection.
+Diagnosis: Pneumonia.
+Allergy: Peanut, reaction rash, severity mild.
+Investigations: White blood cell count 14.2 x10^9/L on 2025-06-15.
+Discharge medications: Tab Paracetamol 500 mg three times daily after meals.

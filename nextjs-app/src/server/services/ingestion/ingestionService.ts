@@ -594,3 +594,32 @@ export async function rerunRecord(actor: AuthUser, id: string, fromStage: JobSta
 
   return toSummary(summaryRowSchema.parse(await loadOwnedRecord(actor, id)))
 }
+
+/** Statuses in which a record is waiting on the worker rather than on a person. */
+const WORKER_STATUSES = ['received', 'consent_check', 'normalizing', 'extracting', 'mapping', 'validating', 'scoring', 'routing']
+/** A job due for less than this long is still about to be picked up: do not start a second pass for it. */
+const KICK_AFTER_SECONDS = 8
+
+/**
+ * Starts a worker pass for a record that is waiting for one: a safety net for when the usual hand-over between
+ * passes is lost. Only does anything when the record has a queued job that has been due for a few seconds, and never
+ * touches the record itself, so it is safe to call repeatedly. Returns whether a pass was started.
+ */
+export async function kickRecord(actor: AuthUser, id: string): Promise<{ kicked: boolean }> {
+  const summary = toSummary(summaryRowSchema.parse(await loadOwnedRecord(actor, id)))
+  if (!WORKER_STATUSES.includes(summary.status)) return { kicked: false }
+
+  const dueBefore = new Date(Date.now() - KICK_AFTER_SECONDS * 1000).toISOString()
+  const { data, error } = await getSupabaseAdmin()
+    .from('pipeline_jobs')
+    .select('id')
+    .eq('record_id', id)
+    .eq('status', 'queued')
+    .lte('run_at', dueBefore)
+    .limit(1)
+  if (error) throw new AppError('INTERNAL', 'Failed to check the job queue.', { cause: error })
+  if ((data ?? []).length === 0) return { kicked: false }
+
+  await triggerWorkerTick({ waitMs: 2500 })
+  return { kicked: true }
+}

@@ -91,13 +91,16 @@ function environmentChecks(): SelfCheckGroup {
   )
 
   if (process.env.NODE_ENV === 'production' && !local) {
-    const limit = env.WORKER_HOST_LIMIT_SECONDS
+    const setting = env.WORKER_HOST_LIMIT_SECONDS
+    const confirmed = env.WORKER_HOST_LIMIT_CONFIRMED
     items.push(
-      !limit
-        ? item('host-limit', 'Worker time limit', 'warn', 'WORKER_HOST_LIMIT_SECONDS is not set. On Netlify set it to 60 and LLM_REQUEST_TIMEOUT_MS to 30000-40000, or a worker call can be cut off in the middle of a record.')
-        : env.LLM_REQUEST_TIMEOUT_MS / 1000 > limit - 10
-          ? item('host-limit', 'Worker time limit', 'warn', `LLM_REQUEST_TIMEOUT_MS (${env.LLM_REQUEST_TIMEOUT_MS} ms) leaves too little of the ${limit} s host limit. Lower it to ${Math.max(10, (limit - 20)) * 1000} ms or less.`)
-          : item('host-limit', 'Worker time limit', 'ok', `A worker call stops starting jobs in time to finish within ${limit} s.`),
+      confirmed
+        ? item('host-limit', 'Worker time limit', 'ok', `A longer host limit (${setting ?? 'unset'} s) was confirmed; passes are sized to it.`)
+        : (setting ?? 26) > 26
+          ? item('host-limit', 'Worker time limit', 'warn', `WORKER_HOST_LIMIT_SECONDS is ${setting}, but the worker plans for 26 s (the Free plan) until WORKER_HOST_LIMIT_CONFIRMED=true is set after running /api/internal/limit-probe. Set it to 26 to match.`)
+          : env.LLM_REQUEST_TIMEOUT_MS / 1000 > 20
+            ? item('host-limit', 'Worker time limit', 'warn', `LLM_REQUEST_TIMEOUT_MS is ${env.LLM_REQUEST_TIMEOUT_MS} ms: with a 26 s host limit a model call must finish within about 20 s. Set it to 20000.`)
+            : item('host-limit', 'Worker time limit', 'ok', 'Passes are sized to the 26 s Free-plan limit; a job a cut-off pass leaves behind is reclaimed within about 40 s.'),
     )
   }
 
@@ -219,6 +222,14 @@ async function dataChecks(): Promise<SelfCheckGroup> {
     (overdue ?? 0) > 0
       ? item('stale-jobs', 'Waiting jobs', 'fail', `${overdue} job(s) have been due for over 10 minutes, so the worker is not running. Locally start "npm run dev:all" (or "npm run worker:dev"); in production check the scheduled function.`)
       : item('stale-jobs', 'Waiting jobs', 'ok', 'Nothing is overdue.'),
+  )
+
+  const stuckBefore = new Date(Date.now() - 90_000).toISOString()
+  const { count: stuck } = await admin.from('pipeline_jobs').select('id', { head: true, count: 'exact' }).eq('status', 'running').lt('locked_at', stuckBefore)
+  items.push(
+    (stuck ?? 0) > 0
+      ? item('stuck-jobs', 'Jobs left running', 'warn', `${stuck} job(s) have been running for over 90 s: a worker pass was cut off. The next pass reclaims them; if this stays, check WORKER_HOST_LIMIT_SECONDS.`)
+      : item('stuck-jobs', 'Jobs left running', 'ok', 'None.'),
   )
 
   const { data: spend } = await admin.rpc('get_llm_spend')
